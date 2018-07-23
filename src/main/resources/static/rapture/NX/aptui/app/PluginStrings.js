@@ -25,6 +25,8 @@ Ext.define('NX.aptui.app.PluginStrings', {
     Repository_Facet_AptFacet_Title: 'APT Settings',
     Repository_Facet_AptFacet_Distribution_FieldLabel: 'Distribution',
     Repository_Facet_AptFacet_Distribution_HelpText: 'Distribution to fetch, for example trusty',
+    Repository_Facet_AptFacet_Origin_FieldLabel: 'Origin',
+    Repository_Facet_AptFacet_Origin_HelpText: 'Origin for repository, for example company_name.com',
     Repository_Facet_AptFacet_Flat_FieldLabel: 'Flat',
     Repository_Facet_AptFacet_Flat_HelpText: 'Is this repository flat?',
     Repository_Facet_AptSigningFacet_Keypair_FieldLabel: 'Signing Key',

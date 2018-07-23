@@ -38,6 +38,13 @@ Ext.define('NX.aptui.view.repository.facet.AptHostedFacet', {
             allowBlank: false
           },
           {
+            xtype:'textfield',
+            name: 'attributes.apt.origin',
+            fieldLabel: NX.I18n.get('Repository_Facet_AptFacet_Origin_FieldLabel'),
+            helpText: NX.I18n.get('Repository_Facet_AptFacet_Origin_HelpText'),
+            allowBlank: true
+          },
+          {
             xtype:'numberfield',
             name: 'attributes.aptHosted.assetHistoryLimit',
             fieldLabel: NX.I18n.get('Repository_Facet_AptHostedFacet_AssetHistoryLimit_FieldLabel'),

@@ -33,4 +33,6 @@ public interface AptFacet
   boolean isFlat();
 
   String getDistribution();
+
+  String getOrigin();
 }

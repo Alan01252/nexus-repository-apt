@@ -194,7 +194,7 @@ public class AptHostedFacet
         addSignatureItem(sha256Builder, SHA256, bzContent, packageRelativeIndexName(entry.getKey(), ".bz2"));
       }
 
-      releaseFile = buildReleaseFile(aptFacet.getDistribution(), store.getFiles().keySet(), md5Builder.toString(), sha256Builder.toString());
+      releaseFile = buildReleaseFile(aptFacet.getDistribution(), aptFacet.getOrigin(), store.getFiles().keySet(), md5Builder.toString(), sha256Builder.toString());
     }
 
     aptFacet.put(releaseIndexName("Release"), new BytesPayload(releaseFile.getBytes(Charsets.UTF_8), AptMimeTypes.TEXT));
@@ -204,9 +204,10 @@ public class AptHostedFacet
     aptFacet.put(releaseIndexName("Release.gpg"), new BytesPayload(releaseGpg, AptMimeTypes.SIGNATURE));
   }
 
-  private String buildReleaseFile(String distribution, Collection<String> architectures, String md5, String sha256) {
+  private String buildReleaseFile(String distribution, String origin, Collection<String> architectures, String md5, String sha256) {
     Paragraph p = new Paragraph(Arrays.asList(
         new ControlFile.ControlField("Suite", distribution),
+        new ControlFile.ControlField("Origin", origin),
         new ControlFile.ControlField("Codename", distribution), new ControlFile.ControlField("Components", "main"),
         new ControlFile.ControlField("Date", DateUtils.formatDate(new Date())),
         new ControlFile.ControlField("Architectures", architectures.stream().collect(Collectors.joining(" "))),

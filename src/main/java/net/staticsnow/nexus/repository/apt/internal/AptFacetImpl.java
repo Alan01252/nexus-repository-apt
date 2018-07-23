@@ -60,6 +60,8 @@ public class AptFacetImpl
 
     @NotNull(groups = { ProxyType.ValidationGroup.class })
     public boolean flat;
+
+    public String origin;
   }
 
   private Config config;
@@ -93,6 +95,11 @@ public class AptFacetImpl
   @Override
   public String getDistribution() {
     return config.distribution;
+  }
+
+  @Override
+  public String getOrigin() {
+    return config.origin;
   }
 
   @Override
