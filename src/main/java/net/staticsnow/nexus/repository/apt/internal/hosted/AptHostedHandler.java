@@ -56,7 +56,7 @@ public class AptHostedHandler
           return HttpResponses.ok();
         }
         else if (path.equals("")) {
-          hostedFacet.ingestAsset(context.getRequest().getPayload());
+          hostedFacet.ingestAsset(context.getRequest().getPayload(), context.getRequest().getParameters());
           return HttpResponses.created();
         }
         else {

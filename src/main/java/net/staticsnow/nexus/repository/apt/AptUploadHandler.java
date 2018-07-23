@@ -71,10 +71,10 @@ public class AptUploadHandler
         String name = controlFile.getField("Package").map(f -> f.value).get();
         String version = controlFile.getField("Version").map(f -> f.value).get();
         String architecture = controlFile.getField("Architecture").map(f -> f.value).get();
-        String assetPath = FacetHelper.buildAssetPath(name, version, architecture);
+        String assetPath = FacetHelper.buildAssetPath(name, version, architecture, null);
         ensurePermitted(repository.getName(), AptFormat.NAME, assetPath, Collections.emptyMap());
         try {
-          Asset asset = hostedFacet.ingestAsset(upload.getAssetUploads().get(0).getPayload());
+          Asset asset = hostedFacet.ingestAsset(upload.getAssetUploads().get(0).getPayload(), null);
           return new UploadResponse(asset);
         } catch (PGPException e) {
           throw new IOException(e);

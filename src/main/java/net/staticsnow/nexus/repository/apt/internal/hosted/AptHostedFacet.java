@@ -52,6 +52,7 @@ import org.sonatype.nexus.repository.storage.TempBlob;
 import org.sonatype.nexus.repository.transaction.TransactionalStoreBlob;
 import org.sonatype.nexus.repository.transaction.TransactionalStoreMetadata;
 import org.sonatype.nexus.repository.view.Content;
+import org.sonatype.nexus.repository.view.Parameters;
 import org.sonatype.nexus.repository.view.Payload;
 import org.sonatype.nexus.repository.view.payloads.BytesPayload;
 import org.sonatype.nexus.repository.view.payloads.StreamPayload;
@@ -79,6 +80,7 @@ public class AptHostedFacet
   private static final String P_ARCHITECTURE = "architecture";
   private static final String P_PACKAGE_NAME = "package_name";
   private static final String P_PACKAGE_VERSION = "package_version";
+  private static final String P_PACKAGE_POOL = "package_pool";
 
   private static final String SELECT_HOSTED_ASSETS = 
       "SELECT " +
@@ -114,19 +116,19 @@ public class AptHostedFacet
   }
 
   @TransactionalStoreBlob
-  public Asset ingestAsset(Payload body) throws IOException, PGPException {
+  public Asset ingestAsset(Payload body, Parameters parameters) throws IOException, PGPException {
     StorageFacet storageFacet = facet(StorageFacet.class);
     try (TempBlob tempBlob = storageFacet.createTempBlob(body, FacetHelper.hashAlgorithms)) {
       ControlFile control = AptPackageParser.parsePackage(tempBlob);
       if (control == null) {
         throw new IllegalOperationException("Invalid Debian package supplied");
       }
-      return ingestAsset(control, tempBlob, body.getSize(), body.getContentType());
+      return ingestAsset(control, tempBlob, body.getSize(), body.getContentType(), parameters);
     }
   }
 
   @TransactionalStoreBlob
-  public Asset ingestAsset(ControlFile control, TempBlob body, long size, String contentType) throws IOException, PGPException {
+  public Asset ingestAsset(ControlFile control, TempBlob body, long size, String contentType, Parameters parameters) throws IOException, PGPException {
     AptFacet aptFacet = getRepository().facet(AptFacet.class);
     StorageTx tx = UnitOfWork.currentTx();
     Bucket bucket = tx.findBucket(getRepository());
@@ -135,7 +137,14 @@ public class AptHostedFacet
     String version = control.getField("Version").map(f -> f.value).get();
     String architecture = control.getField("Architecture").map(f -> f.value).get();
 
-    String assetPath = FacetHelper.buildAssetPath(name, version, architecture);
+
+    String pool = "main";
+
+    if (parameters.contains("poolOverride")) {
+      pool = parameters.get("poolOverride");
+    }
+
+    String assetPath = FacetHelper.buildAssetPath(name, version, architecture, pool);
 
     Content content = aptFacet.put(assetPath, new StreamPayload(() -> body.get(), size, contentType));
     Asset asset = Content.findAsset(tx, bucket, content);
@@ -145,6 +154,7 @@ public class AptHostedFacet
     asset.formatAttributes().set(P_PACKAGE_VERSION, version);
     asset.formatAttributes().set(P_INDEX_SECTION, indexSection);
     asset.formatAttributes().set(P_ASSET_KIND, "DEB");
+    asset.formatAttributes().set(P_PACKAGE_POOL, pool);
     tx.saveAsset(asset);
 
     List<AssetChange> changes = new ArrayList<>();
@@ -173,11 +183,15 @@ public class AptHostedFacet
     StringBuilder sha256Builder = new StringBuilder();
     StringBuilder md5Builder = new StringBuilder();
     String releaseFile;
+
     try (CompressingTempFileStore store = buildPackageIndexes(tx, bucket, changes)) {
+
       for (Map.Entry<String, CompressingTempFileStore.FileMetadata> entry : store.getFiles().entrySet()) {
+
         Content plainContent = aptFacet.put(
             packageIndexName(entry.getKey(), ""),
             new StreamPayload(entry.getValue().plainSupplier(), entry.getValue().plainSize(), AptMimeTypes.TEXT));
+
         addSignatureItem(md5Builder, MD5, plainContent, packageRelativeIndexName(entry.getKey(), ""));
         addSignatureItem(sha256Builder, SHA256, plainContent, packageRelativeIndexName(entry.getKey(), ""));
 
@@ -192,6 +206,7 @@ public class AptHostedFacet
             new StreamPayload(entry.getValue().bzSupplier(), entry.getValue().bzSize(), AptMimeTypes.BZIP));
         addSignatureItem(md5Builder, MD5, bzContent, packageRelativeIndexName(entry.getKey(), ".bz2"));
         addSignatureItem(sha256Builder, SHA256, bzContent, packageRelativeIndexName(entry.getKey(), ".bz2"));
+
       }
 
       releaseFile = buildReleaseFile(aptFacet.getDistribution(), aptFacet.getOrigin(), store.getFiles().keySet(), md5Builder.toString(), sha256Builder.toString());
@@ -236,8 +251,12 @@ public class AptHostedFacet
           continue;
         }
         String arch = d.<String> field(P_ARCHITECTURE, String.class);
+        String pool = d.<String> field(P_PACKAGE_POOL, String.class);
+        if ( pool == null) {
+          pool = "main";
+        }
         String indexSection = d.<String> field(P_INDEX_SECTION, String.class);
-        Writer out = streams.computeIfAbsent(arch, a -> result.openOutput(a));
+        Writer out = streams.computeIfAbsent(arch+ "_" + pool, a -> result.openOutput(a));
         out.write(indexSection);
         out.write("\n\n");
       }
@@ -248,8 +267,9 @@ public class AptHostedFacet
       // HACK: tx.browse won't see changes in the current transaction, so we have to manually add these in here
       for (Asset asset : addAssets) {
         String arch = asset.formatAttributes().get(P_ARCHITECTURE, String.class);
+        String pool = asset.formatAttributes().get(P_PACKAGE_POOL, String.class);
         String indexSection = asset.formatAttributes().get(P_INDEX_SECTION, String.class);
-        Writer out = streams.computeIfAbsent(arch, a -> result.openOutput(a));
+        Writer out = streams.computeIfAbsent(arch + "_" + pool, a -> result.openOutput(a));
         out.write(indexSection);
         out.write("\n\n");
       }
@@ -317,14 +337,25 @@ public class AptHostedFacet
     return "dists/" + dist + "/" + name;
   }
 
-  private String packageIndexName(String arch, String ext) {
+  private String packageIndexName(String key, String ext) {
     AptFacet aptFacet = getRepository().facet(AptFacet.class);
     String dist = aptFacet.getDistribution();
-    return "dists/" + dist + "/main/binary-" + arch + "/Packages" + ext;
+
+
+    String[] parts = key.split("_");
+    String arch = parts[0];
+    String pool = parts[1];
+
+    return "dists/" + dist + "/" + pool + "/binary-" + arch + "/Packages" + ext;
   }
 
-  private String packageRelativeIndexName(String arch, String ext) {
-    return "main/binary-" + arch + "/Packages" + ext;
+  private String packageRelativeIndexName(String key, String ext) {
+
+    String[] parts = key.split("_");
+    String arch = parts[0];
+    String pool = parts[1];
+
+    return pool + "/binary-" + arch + "/Packages" + ext;
   }
 
   private void addSignatureItem(StringBuilder builder, HashAlgorithm algo, Content content, String filename) {
