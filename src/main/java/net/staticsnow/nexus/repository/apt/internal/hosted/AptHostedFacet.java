@@ -20,15 +20,7 @@ import static org.sonatype.nexus.repository.storage.MetadataNodeEntityAdapter.P_
 
 import java.io.IOException;
 import java.io.Writer;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -220,7 +212,18 @@ public class AptHostedFacet
     aptFacet.put(releaseIndexName("Release.gpg"), new BytesPayload(releaseGpg, AptMimeTypes.SIGNATURE));
   }
 
-  private String buildReleaseFile(String distribution, String origin, Collection<String> architectures, String md5, String sha256) {
+  private String buildReleaseFile(String distribution, String origin, Collection<String> keys, String md5, String sha256) {
+
+    Iterator<String> iterator = keys.iterator();
+    List<String> architectures = new ArrayList<>();
+
+    while (iterator.hasNext()){
+      String s = iterator.next();
+      String[] parts = s.split("_");
+      String arch = parts[0];
+      architectures.add(arch);
+    }
+
     Paragraph p = new Paragraph(Arrays.asList(
         new ControlFile.ControlField("Suite", distribution),
         new ControlFile.ControlField("Origin", origin),
