@@ -86,7 +86,8 @@ public class AptHostedFacet
       "SELECT " +
       "name, " +
       "attributes.apt.index_section AS index_section, " +
-      "attributes.apt.architecture AS architecture " +
+      "attributes.apt.architecture AS architecture, " +
+      "attributes.apt.package_pool AS package_pool " +
       "FROM asset " +
       "WHERE bucket=:bucket " +
       "AND attributes.apt.asset_kind=:asset_kind";
@@ -252,7 +253,8 @@ public class AptHostedFacet
         }
         String arch = d.<String> field(P_ARCHITECTURE, String.class);
         String pool = d.<String> field(P_PACKAGE_POOL, String.class);
-        if ( pool == null) {
+        if ( pool == null ) {
+          log.debug("Unable to find pool for " + name);
           pool = "main";
         }
         String indexSection = d.<String> field(P_INDEX_SECTION, String.class);
